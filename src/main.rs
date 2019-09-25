@@ -1,5 +1,5 @@
-extern crate ngc;
-use ngc::*;
+extern crate pgc;
+use pgc::*;
 
 enum Foo {
     None,
