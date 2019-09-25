@@ -1,0 +1,29 @@
+[package]
+name = "ngc"
+version = "0.1.0"
+authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+mimalloc = "0.1"
+parking_lot = "0.9"
+lazy_static = "1.4"
+threadpool = "1.7"
+crossbeam-deque = "0.7"
+scoped_threadpool = "0.1"
+num_cpus = "1.10"
+libc = "0.2"
+rand = "0.7"
+
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi"] }
+kernel32-sys = "0.2"
+
+[profile.dev]
+debug = true 
+opt-level = 0 
+
+[features]
+default = []
+generational = []
