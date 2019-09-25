@@ -3,6 +3,11 @@ name = "ngc"
 version = "0.1.0"
 authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
 edition = "2018"
+description = "Garbage collector"
+repository = "https://github.com/playXE/pgc"
+readme = "README.md"
+keywords = ["gc","garbage-collector"]
+license = "MIT"
 
 [dependencies]
 mimalloc = "0.1"
