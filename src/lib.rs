@@ -241,36 +241,30 @@ lazy_static::lazy_static! {
 }
 
 pub fn add_root(val: Gc<dyn GcObject>) {
-    unsafe {
-        COLLECTOR.with(|mut gc| gc.roots.write().push(val));
-    }
+    COLLECTOR.with(|gc| gc.roots.write().push(val));
 }
 pub fn remove_root(val: Gc<dyn GcObject>) {
-    unsafe {
-        COLLECTOR.with(|mut gc| {
-            let mut roots = gc.roots.write();
-            for i in 0..roots.len() {
-                if roots[i].ptr == val.ptr {
-                    roots.remove(i);
-                    return;
-                }
+    COLLECTOR.with(|gc| {
+        let mut roots = gc.roots.write();
+        for i in 0..roots.len() {
+            if roots[i].ptr == val.ptr {
+                roots.remove(i);
+                return;
             }
-        });
-    }
+        }
+    });
 }
 
 pub fn is_root(val: Gc<dyn GcObject>) -> bool {
-    unsafe {
-        let res = COLLECTOR.with(|gc| {
-            for i in 0..gc.roots.read().len() {
-                if gc.roots.read()[i].ptr == val.ptr {
-                    return true;
-                }
+    let res = COLLECTOR.with(|gc| {
+        for i in 0..gc.roots.read().len() {
+            if gc.roots.read()[i].ptr == val.ptr {
+                return true;
             }
-            false
-        });
-        res
-    }
+        }
+        false
+    });
+    res
 }
 
 pub struct Collector {
@@ -371,6 +365,7 @@ impl Collector {
                 live: true,
                 val,
             });
+            mutator_suspend();
             if self.allocated_young > self.threshold_young {
                 self.gen_collecting = 0;
                 self.collect();
@@ -392,7 +387,6 @@ impl Collector {
                     self.threshold_old = (self.allocated_old as f64 / 0.7) as usize;
                 }
             }
-            mutator_suspend();
             self.allocated_young += layout.size();
 
             let ptr = Gc {
@@ -408,7 +402,6 @@ impl Collector {
     #[cfg(not(feature = "generational"))]
     pub fn allocate<T: GcObject + Sized + 'static>(&mut self, val: T) -> Gc<T> {
         unsafe {
-            mutator_suspend();
             let layout = std::alloc::Layout::new::<GcPtr<T>>();
             let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
@@ -427,6 +420,7 @@ impl Collector {
                 live: true,
                 val,
             });
+            mutator_suspend();
             if self.total_allocated > self.threshold {
                 self.collect();
                 if self.total_allocated as f64 > self.threshold as f64 * 0.7 {

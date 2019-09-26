@@ -16,10 +16,23 @@ use std::sync::Arc;
 
 const GC_SIG_SUSPEND: i32 = SIGPWR;
 
+impl Drop for StkRoot {
+    fn drop(&mut self) {
+        let mut threads = THREADS.lock();
+        for i in 0..threads.len() {
+            if threads[i].thread_id == self.thread_id {
+                println!("Drop thread");
+                threads.remove(i);
+                return;
+            }
+        }
+    }
+}
+
 thread_local! {
     pub static THREAD: RefCell<Arc<StkRoot>> = unsafe {
 
-        let mut thread = StkRoot {
+        let thread = StkRoot {
             thread_handle: std::ptr::null_mut(),
             suspend_ack: AtomicBool::new(false),
             thread_id: pthread_self()
@@ -36,15 +49,6 @@ lazy_static::lazy_static! {
     static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
 }
 
-fn find_thread(id: u64) -> Arc<StkRoot> {
-    for root in THREADS.lock().iter() {
-        if root.thread_id == id {
-            return root.clone();
-        }
-    }
-    unreachable!()
-}
-
 unsafe fn thread_yield(attempt: usize) {
     if attempt >= 2 {
         usleep((attempt - GC_YIELD_MAX_ATTEMPT) as u32 * 1000);
@@ -59,7 +63,6 @@ unsafe extern "C" fn suspend_handler(_: i32) {
         THREAD.with(|t| t.borrow_mut().suspend_ack.store(false, Ordering::Relaxed));
         thread_yield(attempt);
         attempt += 1;
-        println!("shit");
         if GC_INSIDE_COLLECT.load(Ordering::Relaxed) <= 0 {
             break;
         }

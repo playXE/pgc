@@ -2,20 +2,13 @@ extern crate pgc;
 
 use pgc::*;
 struct Node {
-    i: i32,
-    j: i32,
     left: Option<Gc<Node>>,
     right: Option<Gc<Node>>,
 }
 
 impl Node {
     pub const fn new(left: Option<Gc<Node>>, right: Option<Gc<Node>>) -> Self {
-        Self {
-            i: 0,
-            j: 0,
-            left,
-            right,
-        }
+        Self { left, right }
     }
 
     pub const fn leaf() -> Self {
@@ -25,7 +18,6 @@ impl Node {
 
 const ARRAY_SIZE: usize = 500000;
 const MIN_THREE_DEPTH: usize = 4;
-const MAX_THREE_DEPTH: usize = 16;
 
 unsafe impl GcObject for Node {
     fn references(&self) -> Vec<Gc<dyn GcObject>> {
