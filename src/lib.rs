@@ -853,6 +853,8 @@ simple!(
     u32
     u64
     u128
+    f64
+    f32
     bool
     String
     isize
@@ -1087,5 +1089,16 @@ use std::hash::{Hash, Hasher};
 impl<T: Hash + GcObject> Hash for Gc<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.get().hash(state);
+    }
+}
+
+unsafe impl<T: GcObject> GcObject for Option<T> {
+    fn references(&self) -> Vec<Gc<dyn GcObject>> {
+        let mut v: Vec<Gc<dyn GcObject>> = vec![];
+        match self {
+            Some(val) => v.extend(val.references()),
+            _ => (),
+        }
+        v
     }
 }
