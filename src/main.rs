@@ -1,9 +1,17 @@
 extern crate pgc;
+#[macro_use]
+extern crate pgc_derive;
 use pgc::*;
-
+use pgc_derive::*;
 enum Foo {
     None,
     Node(i32, Gc<Foo>),
+}
+
+#[derive(GcObject)]
+struct FooS {
+    x: i32,
+    y: Gc<Foo>,
 }
 
 unsafe impl GcObject for Foo {

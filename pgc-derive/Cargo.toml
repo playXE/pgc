@@ -1,0 +1,21 @@
+[package]
+name = "pgc-derive"
+version = "0.1.0"
+authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
+edition = "2018"
+description = "Garbage collector derive plugin for rust-gc"
+license = "MIT"
+readme="../README.md"
+keywords = ["macro","memory"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+
+[lib]
+name = "pgc_derive"
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+proc-macro2 = "1.0"
+quote = "1.0"
+synstructure = "0.12"
