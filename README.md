@@ -44,6 +44,6 @@ let foo = Rooted:new(Foo {...});
 
 
 # Issues
-- The current collection algorithm is not fully thread safe, for collecting objects in multiple threads we should provide some platform-dependent code for pausing threads (stop-the-world).
+- ~~The current collection algorithm is not fully thread safe, for collecting objects in multiple threads we should provide some platform-dependent code for pausing threads (stop-the-world)~~ Seems that stop-the-world mechanism works.
 - Not fully incremental. Marking can be done in parallel but if you want to mark small pieces of memory you should call `gc_mark` in your code.
 - GC can't properly scan program stack for objects since Rust dynamic dispatch does not fully allow casting some random pointer to trait object and because of that you should root and unroot objects explicitly.

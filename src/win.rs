@@ -46,7 +46,6 @@ static mut GC_ALLOCATE: GcMutexS = GcMutexS {
     state: 0,
     event: std::ptr::null_mut(),
 };
-pub unsafe fn gc_enter() {}
 
 pub unsafe fn mutator_suspend() {
     GC_INSIDE_COLLECT.store(1, Ordering::Relaxed);
@@ -73,4 +72,5 @@ pub unsafe fn mutator_resume() {
             }
         }
     }
+    GC_INSIDE_COLLECT.store(0, Ordering::Relaxed);
 }

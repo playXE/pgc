@@ -17,14 +17,4 @@ unsafe impl GcObject for Foo {
     }
 }
 
-fn main() {
-    unsafe {
-        use std::io::Write;
-        use std::sync::atomic::*;
-        use win::*;
-        std::thread::spawn(|| {});
-        mutator_suspend();
-
-        mutator_resume();
-    }
-}
+fn main() {}

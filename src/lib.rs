@@ -29,6 +29,12 @@ pub mod win;
 #[cfg(target_family = "unix")]
 pub mod pthread;
 
+#[cfg(target_family = "unix")]
+use pthread::*;
+
+#[cfg(target_family = "windows")]
+use win::*;
+
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -113,6 +119,10 @@ pub fn gc_collect_old() {
         gc.collect();
         gc.gen_collecting = 3;
     })
+}
+
+pub fn gc_total_allocated() -> usize {
+    COLLECTOR.with(|gc| gc.total_allocated)
 }
 
 #[cfg(feature = "generational")]
@@ -335,6 +345,7 @@ impl Collector {
     #[cfg(feature = "generational")]
     pub fn allocate<T: GcObject + Sized + 'static>(&mut self, val: T) -> Gc<T> {
         unsafe {
+            mutator_suspend();
             let layout = std::alloc::Layout::new::<GcPtr<T>>();
             let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
@@ -381,6 +392,7 @@ impl Collector {
             };
             self.gen_collecting = 3;
             self.heap.push(ptr);
+            mutator_resume();
             ptr
         }
     }
@@ -388,6 +400,7 @@ impl Collector {
     #[cfg(not(feature = "generational"))]
     pub fn allocate<T: GcObject + Sized + 'static>(&mut self, val: T) -> Gc<T> {
         unsafe {
+            mutator_suspend();
             let layout = std::alloc::Layout::new::<GcPtr<T>>();
             let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
@@ -419,11 +432,15 @@ impl Collector {
             };
 
             self.heap.push(ptr);
+            mutator_resume();
             ptr
         }
     }
 
     pub fn collect(&mut self) {
+        unsafe {
+            mutator_suspend();
+        }
         if unsafe { INCREMENTAL } {
             if self.heap.len() < 100 {
                 let mut stack = vec![];
@@ -536,6 +553,9 @@ impl Collector {
                     self.threshold_old = (self.allocated_old as f64 / 0.7) as usize;
                 }
             }
+        }
+        unsafe {
+            mutator_resume();
         }
     }
 }
