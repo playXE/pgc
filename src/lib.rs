@@ -22,6 +22,13 @@ use std::ops::CoerceUnsized;
 use std::sync::atomic::AtomicBool;
 
 use mimalloc::MiMalloc;
+
+#[cfg(target_family = "windows")]
+pub mod win;
+
+#[cfg(target_family = "unix")]
+pub mod pthread;
+
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
@@ -342,6 +349,8 @@ impl Collector {
                 mark: AtomicBool::new(false),
                 #[cfg(feature = "generational")]
                 gen: AtomicU8::new(0),
+                #[cfg(test)]
+                live: true,
                 val,
             });
             if self.allocated_young > self.threshold_young {

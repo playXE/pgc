@@ -18,14 +18,13 @@ unsafe impl GcObject for Foo {
 }
 
 fn main() {
-    //enable_incremental();
-    {
-        let v = Rooted::new(Foo::Node(0, Gc::new(Foo::None)));
-        match v.get_mut() {
-            Foo::Node(_, n) => *n = v.inner(),
-            _ => (),
-        }
+    unsafe {
+        use std::io::Write;
+        use std::sync::atomic::*;
+        use win::*;
+        std::thread::spawn(|| {});
+        mutator_suspend();
+
+        mutator_resume();
     }
-    gc_collect();
-    //gc_collect_medium();
 }
