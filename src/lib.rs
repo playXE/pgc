@@ -203,11 +203,14 @@ impl<T: ?Sized + GcObject> Gc<T> {
     }
     fn mark(&self) -> bool {
         unsafe {
-            if (&mut *self.ptr).mark.load(A::Relaxed) != false {
-                false
-            } else {
-                (&mut *self.ptr).mark.store(true, A::Relaxed);
-                true
+            match (&*self.ptr).mark.compare_exchange(
+                false,
+                true,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(false) => true,
+                _ => false,
             }
         }
     }
@@ -241,7 +244,15 @@ lazy_static::lazy_static! {
 }
 
 pub fn add_root(val: Gc<dyn GcObject>) {
-    COLLECTOR.with(|gc| gc.roots.write().push(val));
+    COLLECTOR.with(|gc| {
+        let mut lock = gc.roots.write();
+        for root in lock.iter() {
+            if root.ptr == val.ptr {
+                return;
+            }
+        }
+        lock.push(val);
+    });
 }
 pub fn remove_root(val: Gc<dyn GcObject>) {
     COLLECTOR.with(|gc| {
@@ -479,6 +490,7 @@ impl Collector {
                 });
             }
         }
+        let prev = self.heap.len();
         let mut heap = vec![];
         for item in self.heap.iter() {
             if item.is_marked() {
