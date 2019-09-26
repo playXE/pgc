@@ -59,7 +59,6 @@ unsafe extern "C" fn suspend_handler(_: i32) {
         THREAD.with(|t| t.borrow_mut().suspend_ack.store(false, Ordering::Relaxed));
         thread_yield(attempt);
         attempt += 1;
-        println!("shit");
         if GC_INSIDE_COLLECT.load(Ordering::Relaxed) <= 0 {
             break;
         }
