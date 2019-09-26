@@ -19,7 +19,6 @@ scoped_threadpool = "0.1"
 num_cpus = "1.10"
 libc = "0.2"
 rand = "0.7"
-pgc-derive = {path = "pgc-derive"}
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi"] }

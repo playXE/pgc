@@ -8,12 +8,6 @@ enum Foo {
     Node(i32, Gc<Foo>),
 }
 
-#[derive(GcObject)]
-struct FooS {
-    x: i32,
-    y: Gc<Foo>,
-}
-
 unsafe impl GcObject for Foo {
     fn references(&self) -> Vec<Gc<dyn GcObject>> {
         let mut v: Vec<Gc<dyn GcObject>> = vec![];
