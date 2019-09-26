@@ -1,9 +1,9 @@
 [package]
 name = "pgc-derive"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Adel Prokurov <adel.prokurov@protonmail.com>"]
 edition = "2018"
-description = "Garbage collector derive plugin for rust-gc"
+description = "Garbage collector derive plugin for pgc"
 license = "MIT"
 readme="../README.md"
 keywords = ["macro","memory"]

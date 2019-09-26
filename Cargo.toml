@@ -19,7 +19,7 @@ scoped_threadpool = "0.1"
 num_cpus = "1.10"
 libc = "0.2"
 rand = "0.7"
-
+time = "0.1"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi","errhandlingapi","processthreadsapi"] }
 kernel32-sys = "0.2"
