@@ -353,7 +353,6 @@ impl Collector {
     #[cfg(feature = "generational")]
     pub fn allocate<T: GcObject + Sized + 'static>(&mut self, val: T) -> Gc<T> {
         unsafe {
-            mutator_suspend();
             let layout = std::alloc::Layout::new::<GcPtr<T>>();
             let ptr = std::alloc::alloc(layout);
             if ptr.is_null() {
@@ -393,6 +392,7 @@ impl Collector {
                     self.threshold_old = (self.allocated_old as f64 / 0.7) as usize;
                 }
             }
+            mutator_suspend();
             self.allocated_young += layout.size();
 
             let ptr = Gc {
