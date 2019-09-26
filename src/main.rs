@@ -17,4 +17,15 @@ unsafe impl GcObject for Foo {
     }
 }
 
-fn main() {}
+impl Drop for Foo {
+    fn drop(&mut self) {
+        println!("Drop");
+    }
+}
+
+fn main() {
+    {
+        let r = Rooted::new(Foo::None);
+    }
+    gc_collect();
+}

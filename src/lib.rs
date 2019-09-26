@@ -247,16 +247,15 @@ pub fn add_root(val: Gc<dyn GcObject>) {
 }
 pub fn remove_root(val: Gc<dyn GcObject>) {
     unsafe {
-        mutator_suspend();
         COLLECTOR.with(|mut gc| {
-            for i in 0..gc.roots.read().len() {
-                if gc.roots.read()[i].ptr == val.ptr {
-                    gc.roots.write().remove(i);
+            let mut roots = gc.roots.write();
+            for i in 0..roots.len() {
+                if roots[i].ptr == val.ptr {
+                    roots.remove(i);
                     return;
                 }
             }
         });
-        mutator_resume();
     }
 }
 
@@ -527,9 +526,7 @@ impl Collector {
                                 self.allocated_old.wrapping_sub(std::mem::size_of_val(item));
                         }
 
-                        unsafe {
-                            let _ = Box::from_raw(item.ptr);
-                        }
+                        unsafe { std::ptr::drop_in_place(item.ptr) }
                     } else {
                         heap.push(*item);
                     }
@@ -539,6 +536,7 @@ impl Collector {
                     self.total_allocated = self
                         .total_allocated
                         .wrapping_sub(std::mem::size_of_val(item));
+
                     unsafe { std::ptr::drop_in_place(item.ptr) }
                 }
             }
