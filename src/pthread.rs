@@ -49,7 +49,7 @@ unsafe fn thread_yield(attempt: usize) {
     if attempt >= 2 {
         usleep((attempt - GC_YIELD_MAX_ATTEMPT) as u32 * 1000);
     } else {
-        sched_yield();
+        std::thread::yield_now();
     }
 }
 
