@@ -1,8 +1,6 @@
 extern crate pgc;
-#[macro_use]
-extern crate pgc_derive;
+
 use pgc::*;
-use pgc_derive::*;
 enum Foo {
     None,
     Node(i32, Gc<Foo>),
