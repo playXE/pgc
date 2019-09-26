@@ -38,15 +38,6 @@ lazy_static::lazy_static! {
     static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
 }
 
-struct GcMutexS {
-    state: i64,
-    event: *mut u8,
-}
-static mut GC_ALLOCATE: GcMutexS = GcMutexS {
-    state: 0,
-    event: std::ptr::null_mut(),
-};
-
 pub unsafe fn mutator_suspend() {
     GC_INSIDE_COLLECT.store(1, Ordering::Relaxed);
     let lock = THREADS.lock();

@@ -241,28 +241,41 @@ lazy_static::lazy_static! {
 }
 
 pub fn add_root(val: Gc<dyn GcObject>) {
-    COLLECTOR.with(|mut gc| gc.roots.push(val));
+    unsafe {
+        mutator_suspend();
+        COLLECTOR.with(|mut gc| gc.roots.push(val));
+        mutator_resume();
+    }
 }
 pub fn remove_root(val: Gc<dyn GcObject>) {
-    COLLECTOR.with(|mut gc| {
-        for i in 0..gc.roots.len() {
-            if gc.roots[i].ptr == val.ptr {
-                gc.roots.remove(i);
-                return;
+    unsafe {
+        mutator_suspend();
+        COLLECTOR.with(|mut gc| {
+            for i in 0..gc.roots.len() {
+                if gc.roots[i].ptr == val.ptr {
+                    gc.roots.remove(i);
+                    return;
+                }
             }
-        }
-    })
+        });
+        mutator_resume();
+    }
 }
 
 pub fn is_root(val: Gc<dyn GcObject>) -> bool {
-    COLLECTOR.with(|gc| {
-        for i in 0..gc.roots.len() {
-            if gc.roots[i].ptr == val.ptr {
-                return true;
+    unsafe {
+        mutator_suspend();
+        let res = COLLECTOR.with(|gc| {
+            for i in 0..gc.roots.len() {
+                if gc.roots[i].ptr == val.ptr {
+                    return true;
+                }
             }
-        }
-        false
-    })
+            false
+        });
+        mutator_resume();
+        res
+    }
 }
 
 pub struct Collector {
