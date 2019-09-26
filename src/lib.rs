@@ -140,7 +140,7 @@ pub fn gc_collect_medium() {
 pub fn gc_mark_parallel() {
     COLLECTOR.with(|gc| {
         let mut lock = gc.pool.lock();
-        start_marking_parallel(&gc.roots, &mut lock, 0);
+        start_marking_parallel(&gc.roots.read(), &mut lock, 0);
     })
 }
 
@@ -242,18 +242,16 @@ lazy_static::lazy_static! {
 
 pub fn add_root(val: Gc<dyn GcObject>) {
     unsafe {
-        mutator_suspend();
-        COLLECTOR.with(|mut gc| gc.roots.push(val));
-        mutator_resume();
+        COLLECTOR.with(|mut gc| gc.roots.write().push(val));
     }
 }
 pub fn remove_root(val: Gc<dyn GcObject>) {
     unsafe {
         mutator_suspend();
         COLLECTOR.with(|mut gc| {
-            for i in 0..gc.roots.len() {
-                if gc.roots[i].ptr == val.ptr {
-                    gc.roots.remove(i);
+            for i in 0..gc.roots.read().len() {
+                if gc.roots.read()[i].ptr == val.ptr {
+                    gc.roots.write().remove(i);
                     return;
                 }
             }
@@ -264,22 +262,20 @@ pub fn remove_root(val: Gc<dyn GcObject>) {
 
 pub fn is_root(val: Gc<dyn GcObject>) -> bool {
     unsafe {
-        mutator_suspend();
         let res = COLLECTOR.with(|gc| {
-            for i in 0..gc.roots.len() {
-                if gc.roots[i].ptr == val.ptr {
+            for i in 0..gc.roots.read().len() {
+                if gc.roots.read()[i].ptr == val.ptr {
                     return true;
                 }
             }
             false
         });
-        mutator_resume();
         res
     }
 }
 
 pub struct Collector {
-    roots: Vec<Gc<dyn GcObject>>,
+    roots: parking_lot::RwLock<Vec<Gc<dyn GcObject>>>,
     heap: Vec<Gc<dyn GcObject>>,
     pool: parking_lot::Mutex<Pool>,
     threshold: usize,
@@ -303,7 +299,7 @@ pub struct Collector {
 impl Collector {
     pub fn new() -> Collector {
         Collector {
-            roots: vec![],
+            roots: parking_lot::RwLock::new(vec![]),
             heap: vec![],
             pool: parking_lot::Mutex::new(Pool::new(4)),
             threshold: 100,
@@ -457,7 +453,7 @@ impl Collector {
         if unsafe { INCREMENTAL } {
             if self.heap.len() < 100 {
                 let mut stack = vec![];
-                for root in self.roots.iter() {
+                for root in self.roots.read().iter() {
                     if root.mark() {
                         stack.push(*root);
                     }
@@ -472,12 +468,12 @@ impl Collector {
             } else {
                 let mut pool = self.pool.lock();
                 let gen = self.gen_collecting;
-                start_marking_parallel(&self.roots, &mut pool, gen);
+                start_marking_parallel(&self.roots.read(), &mut pool, gen);
             }
         } else {
             // Sync marking.
             let mut stack = vec![];
-            for root in self.roots.iter() {
+            for root in self.roots.read().iter() {
                 if root.mark() {
                     stack.push(*root);
                 }
