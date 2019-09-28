@@ -1253,6 +1253,22 @@ unsafe impl<T: GcObject> GcObject for Option<T> {
     }
 }
 
+unsafe impl<T: GcObject> GcObject for parking_lot::Mutex<T> {
+    fn references(&self) -> Vec<Gc<dyn GcObject>> {
+        let mut v: Vec<Gc<dyn GcObject>> = vec![];
+        v.extend(self.lock().references());
+        v
+    }
+}
+
+unsafe impl<T: GcObject> GcObject for parking_lot::RwLock<T> {
+    fn references(&self) -> Vec<Gc<dyn GcObject>> {
+        let mut v: Vec<Gc<dyn GcObject>> = vec![];
+        v.extend(self.read().references());
+        v
+    }
+}
+
 pub struct Timer {
     active: bool,
     timestamp: u64,
