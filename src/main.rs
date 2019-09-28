@@ -62,7 +62,6 @@ fn make_tree(depth: i32) -> Gc<Node> {
 
 fn time_construction(s: i32, depth: i32) {
     let num_iters = num_iters(s, depth);
-
     let start = time::PreciseTime::now();
 
     let mut i = 0;
@@ -89,9 +88,9 @@ fn time_construction(s: i32, depth: i32) {
 }
 
 fn main() {
-    let depth = 10;
-
-    let start = time::PreciseTime::now();
+    //enable_incremental();
+    enable_gc_stats();
+    let depth = 6;
     make_tree(depth + 1);
     let long_lived = Rooted::new(Node::leaf());
     populate(depth, long_lived.inner());
@@ -102,7 +101,6 @@ fn main() {
         time_construction(depth, d as _);
         d = d + 2;
     }
-    let finish = time::PreciseTime::now();
-    gc_collect();
-    println!("Completed in {}ms", start.to(finish).num_milliseconds());
+    //println!("Completed in {}ms", start.to(finish).num_milliseconds());
+    gc_summary();
 }

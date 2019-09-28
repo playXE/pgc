@@ -38,19 +38,39 @@ use win::*;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-static mut INCREMENTAL: bool = false;
-
+static mut INCREMENTAL: AtomicBool = AtomicBool::new(false);
+static mut GC_STATS: AtomicBool = AtomicBool::new(false);
+lazy_static::lazy_static!(
+    static ref TIMER: parking_lot::Mutex<Timer> = parking_lot::Mutex::new(Timer::new(false));
+);
 #[cfg(test)]
 mod tests;
+
+pub fn enable_gc_stats() {
+    unsafe {
+        GC_STATS.store(true, Ordering::Relaxed);
+        *TIMER.lock() = Timer::new(true);
+    }
+}
+pub fn disable_gc_stats() {
+    unsafe {
+        GC_STATS.store(false, Ordering::Relaxed);
+    }
+}
+
+pub fn gc_summary() {
+    COLLECTOR.with(|gc| gc.summary());
+}
+
 pub fn enable_incremental() {
     unsafe {
-        INCREMENTAL = true;
+        INCREMENTAL.store(true, Ordering::Relaxed);
     }
 }
 
 pub fn disable_incremental() {
     unsafe {
-        INCREMENTAL = false;
+        INCREMENTAL.store(false, Ordering::Relaxed);
     }
 }
 
@@ -237,6 +257,14 @@ impl<T> Handle<T> {
     }
 }
 
+impl<T> Drop for Handle<T> {
+    fn drop(&mut self) {
+        unsafe {
+            std::ptr::drop_in_place(&mut self.handle);
+        }
+    }
+}
+
 lazy_static::lazy_static! {
     static ref COLLECTOR: Handle<Collector> = Handle {
         handle: parking_lot::Mutex::new(Collector::new())
@@ -278,6 +306,68 @@ pub fn is_root(val: Gc<dyn GcObject>) -> bool {
     res
 }
 
+struct CollectionStats {
+    collections: usize,
+    total_pause: f32,
+    pauses: Vec<f32>,
+}
+
+pub struct AllNumbers(Vec<f32>);
+
+impl fmt::Display for AllNumbers {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[")?;
+        let mut first = true;
+        for num in &self.0 {
+            if !first {
+                write!(f, ",")?;
+            }
+            write!(f, "{:.1}", num)?;
+            first = false;
+        }
+        write!(f, "]")
+    }
+}
+
+impl CollectionStats {
+    fn new() -> CollectionStats {
+        CollectionStats {
+            collections: 0,
+            total_pause: 0f32,
+            pauses: Vec::new(),
+        }
+    }
+
+    fn add(&mut self, pause: f32) {
+        self.collections += 1;
+        self.total_pause += pause;
+        self.pauses.push(pause);
+    }
+
+    fn pause(&self) -> f32 {
+        self.total_pause
+    }
+
+    fn pauses(&self) -> AllNumbers {
+        AllNumbers(self.pauses.clone())
+    }
+
+    fn mutator(&self, runtime: f32) -> f32 {
+        runtime - self.total_pause
+    }
+
+    fn collections(&self) -> usize {
+        self.collections
+    }
+
+    fn percentage(&self, runtime: f32) -> (f32, f32) {
+        let gc_percentage = ((self.total_pause / runtime) * 100.0).round();
+        let mutator_percentage = 100.0 - gc_percentage;
+
+        (mutator_percentage, gc_percentage)
+    }
+}
+
 pub struct Collector {
     roots: parking_lot::RwLock<Vec<Gc<dyn GcObject>>>,
     heap: Vec<Gc<dyn GcObject>>,
@@ -298,6 +388,7 @@ pub struct Collector {
     #[cfg(feature = "generational")]
     allocated_young: usize,
     gen_collecting: u8,
+    stats: parking_lot::Mutex<CollectionStats>,
 }
 
 impl Collector {
@@ -321,6 +412,7 @@ impl Collector {
             #[cfg(feature = "generational")]
             allocated_young: 0,
             gen_collecting: 0,
+            stats: parking_lot::Mutex::new(CollectionStats::new()),
         }
     }
 
@@ -454,8 +546,9 @@ impl Collector {
         unsafe {
             mutator_suspend();
         }
-        if unsafe { INCREMENTAL } {
-            if self.heap.len() < 100 {
+        let mut timer = Timer::new(unsafe { GC_STATS.load(Ordering::Relaxed) });
+        if unsafe { INCREMENTAL.load(Ordering::Relaxed) } {
+            /*if self.heap.len() < 100 {
                 let mut stack = vec![];
                 for root in self.roots.read().iter() {
                     if root.mark() {
@@ -469,7 +562,8 @@ impl Collector {
                         }
                     });
                 }
-            } else {
+            } else */
+            {
                 let mut pool = self.pool.lock();
                 let gen = self.gen_collecting;
                 start_marking_parallel(&self.roots.read(), &mut pool, gen);
@@ -490,7 +584,6 @@ impl Collector {
                 });
             }
         }
-        let prev = self.heap.len();
         let mut heap = vec![];
         for item in self.heap.iter() {
             if item.is_marked() {
@@ -532,7 +625,9 @@ impl Collector {
                                 self.allocated_old.wrapping_sub(std::mem::size_of_val(item));
                         }
 
-                        unsafe { std::ptr::drop_in_place(item.ptr) }
+                        unsafe {
+                            let _ = Box::from_raw(item.ptr);
+                        }
                     } else {
                         heap.push(*item);
                     }
@@ -543,7 +638,9 @@ impl Collector {
                         .total_allocated
                         .wrapping_sub(std::mem::size_of_val(item));
 
-                    unsafe { std::ptr::drop_in_place(item.ptr) }
+                    unsafe {
+                        let _ = Box::from_raw(item.ptr);
+                    }
                 }
             }
         }
@@ -567,8 +664,55 @@ impl Collector {
                 }
             }
         }
+
         unsafe {
+            if GC_STATS.load(Ordering::Relaxed) {
+                let duration = timer.stop();
+                let mut stats = self.stats.lock();
+                stats.add(duration);
+            }
             mutator_resume();
+        }
+    }
+    fn summary(&self) {
+        let mut timer = TIMER.lock();
+        let runtime = timer.stop();
+        let stats = self.stats.lock();
+
+        let (mutator, gc) = stats.percentage(runtime);
+        eprintln!("GC stats: total={:.1}", runtime);
+        eprintln!("GC stats: mutator={:.1}", stats.mutator(runtime));
+        eprintln!("GC stats: collection={:.1}", stats.pause());
+
+        eprintln!("");
+        eprintln!("GC stats: collection-count={}", stats.collections());
+        eprintln!("GC stats: collection-pauses={}", stats.pauses());
+        eprintln!("GC stats: threshold={}", self.threshold);
+
+        eprintln!(
+            "GC summary: {:.1}ms collection ({}), {:.1}ms mutator, {:.1}ms total ({}% mutator, {}% GC)",
+            stats.pause(),
+            stats.collections(),
+            stats.mutator(runtime),
+            runtime,
+            mutator,
+            gc,
+        );
+        if unsafe { GC_STATS.load(Ordering::Relaxed) } {
+            *timer = Timer::new(true);
+        }
+    }
+}
+
+impl Drop for Collector {
+    fn drop(&mut self) {
+        if unsafe { GC_STATS.load(Ordering::Relaxed) } {
+            self.summary();
+        }
+        for item in self.heap.iter() {
+            unsafe {
+                let _ = Box::from_raw(item.ptr);
+            }
         }
     }
 }
@@ -1107,4 +1251,67 @@ unsafe impl<T: GcObject> GcObject for Option<T> {
         }
         v
     }
+}
+
+pub struct Timer {
+    active: bool,
+    timestamp: u64,
+}
+
+impl Timer {
+    pub fn new(active: bool) -> Timer {
+        let ts = if active { timestamp() } else { 0 };
+
+        Timer {
+            active: active,
+            timestamp: ts,
+        }
+    }
+
+    pub fn stop(&mut self) -> f32 {
+        assert!(self.active);
+        let curr = timestamp();
+        let last = self.timestamp;
+        self.timestamp = curr;
+
+        in_ms(curr - last)
+    }
+
+    pub fn stop_with<F>(&self, f: F) -> u64
+    where
+        F: FnOnce(f32),
+    {
+        if self.active {
+            let ts = timestamp() - self.timestamp;
+
+            f(in_ms(ts));
+
+            ts
+        } else {
+            0
+        }
+    }
+
+    pub fn ms<F>(active: bool, f: F) -> f32
+    where
+        F: FnOnce(),
+    {
+        if active {
+            let ts = timestamp();
+            f();
+            let diff = timestamp() - ts;
+            in_ms(diff)
+        } else {
+            f();
+            0.0f32
+        }
+    }
+}
+
+pub fn in_ms(ns: u64) -> f32 {
+    (ns as f32) / 1000.0 / 1000.0
+}
+
+pub fn timestamp() -> u64 {
+    time::precise_time_ns()
 }
