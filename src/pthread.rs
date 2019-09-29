@@ -59,8 +59,8 @@ unsafe fn thread_yield(attempt: usize) {
 
 unsafe extern "C" fn suspend_handler(_: i32) {
     let mut attempt = 0;
+    THREAD.with(|t| t.borrow_mut().suspend_ack.store(false, Ordering::Relaxed));
     loop {
-        THREAD.with(|t| t.borrow_mut().suspend_ack.store(false, Ordering::Relaxed));
         thread_yield(attempt);
         attempt += 1;
         if GC_INSIDE_COLLECT.load(Ordering::Relaxed) <= 0 {
