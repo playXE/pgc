@@ -721,7 +721,7 @@ impl Collector {
         }
     }
     fn summary(&self) {
-        let mut timer = TIMER.read();
+        let mut timer = TIMER.write();
         let runtime = timer.stop();
         let stats = self.stats.lock();
 
