@@ -25,7 +25,7 @@ thread_local! {
             thread_id: pthread_self()
         };
         let r = Arc::new(thread);
-        THREADS.lock().push(r.clone());
+        THREADS.write().push(r.clone());
         RefCell::new(r)
     };
 }
@@ -33,7 +33,7 @@ thread_local! {
 const GC_YIELD_MAX_ATTEMPT: usize = 2;
 
 lazy_static::lazy_static! {
-    pub static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
+    pub static ref THREADS: parking_lot::RwLock<Vec<Arc<StkRoot>>> = parking_lot::RwLock::new(vec![]);
 }
 
 unsafe fn thread_yield(attempt: usize) {
@@ -58,7 +58,7 @@ unsafe extern "C" fn suspend_handler(_: i32) {
 
 pub unsafe fn mutator_suspend() {
     GC_INSIDE_COLLECT.store(1, Ordering::Relaxed);
-    let lock = THREADS.lock();
+    let lock = THREADS.read();
     for root in lock.iter() {
         if !THREAD.with(|t| Arc::ptr_eq(root, &t.borrow())) {
             root.suspend_ack.store(true, Ordering::Relaxed);

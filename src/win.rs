@@ -29,18 +29,18 @@ thread_local! {
         };
         DuplicateHandle(process, handle, process, (&mut thread.thread_handle) as *mut *mut u8 as *mut *mut _, 0,0, DUPLICATE_SAME_ACCESS);
         let r = Arc::new(thread);
-        THREADS.lock().push(r.clone());
+        THREADS.write().push(r.clone());
         RefCell::new(r)
     };
 }
 
 lazy_static::lazy_static! {
-    pub static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
+    pub static ref THREADS: parking_lot::RwLock<Vec<Arc<StkRoot>>> = parking_lot::RwLock::new(vec![]);
 }
 
 pub unsafe fn mutator_suspend() {
     GC_INSIDE_COLLECT.store(1, Ordering::Relaxed);
-    let lock = THREADS.lock();
+    let lock = THREADS.read();
     for root in lock.iter() {
         if !THREAD.with(|t| Arc::ptr_eq(root, &t.borrow())) {
             if SuspendThread(root.thread_handle as *mut _) == !0 {
@@ -55,7 +55,7 @@ pub unsafe fn mutator_suspend() {
 }
 
 pub unsafe fn mutator_resume() {
-    let lock = THREADS.lock();
+    let lock = THREADS.read();
     for root in lock.iter() {
         if !THREAD.with(|t| Arc::ptr_eq(root, &t.borrow())) {
             if ResumeThread(root.thread_handle as *mut _) == !0 {

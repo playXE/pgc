@@ -44,7 +44,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 static mut INCREMENTAL: AtomicBool = AtomicBool::new(false);
 static mut GC_STATS: AtomicBool = AtomicBool::new(false);
 lazy_static::lazy_static!(
-    static ref TIMER: parking_lot::Mutex<Timer> = parking_lot::Mutex::new(Timer::new(false));
+    static ref TIMER: parking_lot::RwLock<Timer> = parking_lot::RwLock::new(Timer::new(false));
 );
 #[cfg(test)]
 mod tests;
@@ -52,7 +52,7 @@ mod tests;
 pub fn enable_gc_stats() {
     unsafe {
         GC_STATS.store(true, Ordering::Relaxed);
-        *TIMER.lock() = Timer::new(true);
+        *TIMER.write() = Timer::new(true);
     }
 }
 pub fn disable_gc_stats() {
@@ -721,7 +721,7 @@ impl Collector {
         }
     }
     fn summary(&self) {
-        let mut timer = TIMER.lock();
+        let mut timer = TIMER.read();
         let runtime = timer.stop();
         let stats = self.stats.lock();
 
