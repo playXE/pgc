@@ -16,19 +16,6 @@ use std::sync::Arc;
 
 const GC_SIG_SUSPEND: i32 = SIGPWR;
 
-impl Drop for StkRoot {
-    fn drop(&mut self) {
-        let mut threads = THREADS.lock();
-        for i in 0..threads.len() {
-            if threads[i].thread_id == self.thread_id {
-                println!("Drop thread");
-                threads.remove(i);
-                return;
-            }
-        }
-    }
-}
-
 thread_local! {
     pub static THREAD: RefCell<Arc<StkRoot>> = unsafe {
 
@@ -46,7 +33,7 @@ thread_local! {
 const GC_YIELD_MAX_ATTEMPT: usize = 2;
 
 lazy_static::lazy_static! {
-    static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
+    pub static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
 }
 
 unsafe fn thread_yield(attempt: usize) {

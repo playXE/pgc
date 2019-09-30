@@ -34,20 +34,8 @@ thread_local! {
     };
 }
 
-impl Drop for StkRoot {
-    fn drop(&mut self) {
-        let mut threads = THREADS.lock();
-        for i in 0..threads.len() {
-            if threads[i].thread_handle == self.thread_handle {
-                threads.remove(i);
-                return;
-            }
-        }
-    }
-}
-
 lazy_static::lazy_static! {
-    static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
+    pub static ref THREADS: parking_lot::Mutex<Vec<Arc<StkRoot>>> = parking_lot::Mutex::new(vec![]);
 }
 
 pub unsafe fn mutator_suspend() {

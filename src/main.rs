@@ -88,7 +88,7 @@ fn time_construction(s: i32, depth: i32) {
 }
 
 fn main() {
-    //enable_incremental();
+    enable_incremental();
     enable_gc_stats();
     let depth = 6;
     make_tree(depth + 1);

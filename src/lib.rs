@@ -21,6 +21,9 @@ use std::marker::Unsize;
 use std::ops::CoerceUnsized;
 use std::sync::atomic::AtomicBool;
 
+#[cfg(feature = "generational")]
+use std::sync::atomic::AtomicU8;
+
 use mimalloc::MiMalloc;
 
 #[cfg(target_family = "windows")]
@@ -56,6 +59,30 @@ pub fn disable_gc_stats() {
     unsafe {
         GC_STATS.store(false, Ordering::Relaxed);
     }
+}
+use std::sync::Arc;
+pub fn gc_attach_current_thread() {
+    THREAD.with(|thread| {
+        let mut threads = THREADS.lock();
+        for threadx in threads.iter() {
+            if Arc::ptr_eq(threadx, &thread.borrow()) {
+                return;
+            }
+        }
+        threads.push(thread.borrow().clone());
+    });
+}
+
+pub fn gc_detach_current_thread() {
+    THREAD.with(|thread| {
+        let mut threads = THREADS.lock();
+        for i in 0..threads.len() {
+            if Arc::ptr_eq(&threads[i], &thread.borrow()) {
+                threads.remove(i);
+                return;
+            }
+        }
+    })
 }
 
 pub fn gc_summary() {
@@ -490,7 +517,7 @@ impl Collector {
                     self.threshold_old = (self.allocated_old as f64 / 0.7) as usize;
                 }
             }
-            self.allocated_young += layout.size();
+            self.allocated_young = self.allocated_young.wrapping_add(layout.size());
 
             let ptr = Gc {
                 ptr: ptr as *mut GcPtr<T>,
@@ -524,6 +551,14 @@ impl Collector {
                 val,
             });
             mutator_suspend();
+            /*if unsafe { INCREMENTAL.load(A::SeqCst) } {
+                let rootset = self.roots.write();
+                for root in rootset.iter() {
+                    root.unmark();
+                }
+                let mut pool = self.pool.lock();
+                start_marking_parallel(&rootset, &mut pool, 255);
+            }*/
             if self.total_allocated > self.threshold {
                 self.collect();
                 if self.total_allocated as f64 > self.threshold as f64 * 0.7 {
@@ -547,28 +582,29 @@ impl Collector {
             mutator_suspend();
         }
         let mut timer = Timer::new(unsafe { GC_STATS.load(Ordering::Relaxed) });
-        if unsafe { INCREMENTAL.load(Ordering::Relaxed) } {
-            /*if self.heap.len() < 100 {
-                let mut stack = vec![];
-                for root in self.roots.read().iter() {
-                    if root.mark() {
-                        stack.push(*root);
+        //if unsafe { INCREMENTAL.load(Ordering::Relaxed) } {
+        /*if self.heap.len() < 100 {
+            let mut stack = vec![];
+            for root in self.roots.read().iter() {
+                if root.mark() {
+                    stack.push(*root);
+                }
+            }
+            while let Some(object) = stack.pop() {
+                object.visit(|x| {
+                    if x.mark() {
+                        stack.push(x);
                     }
-                }
-                while let Some(object) = stack.pop() {
-                    object.visit(|x| {
-                        if x.mark() {
-                            stack.push(x);
-                        }
-                    });
-                }
-            } else */
-            {
+                });
+            }
+        } else */
+        /*    {
                 let mut pool = self.pool.lock();
                 let gen = self.gen_collecting;
                 start_marking_parallel(&self.roots.read(), &mut pool, gen);
             }
-        } else {
+        } else*/
+        {
             // Sync marking.
             let mut stack = vec![];
             for root in self.roots.read().iter() {
@@ -598,8 +634,16 @@ impl Collector {
                         _ => unreachable!(),
                     };
                     match gen - 1 {
-                        0 => self.allocated_young -= std::mem::size_of_val(item),
-                        1 => self.allocated_medium -= std::mem::size_of_val(item),
+                        0 => {
+                            self.allocated_young = self
+                                .allocated_medium
+                                .wrapping_sub(std::mem::size_of_val(item))
+                        }
+                        1 => {
+                            self.allocated_medium = self
+                                .allocated_medium
+                                .wrapping_sub(std::mem::size_of_val(item))
+                        }
                         _ => unreachable!(),
                     };
                 }
@@ -688,6 +732,7 @@ impl Collector {
         eprintln!("GC stats: collection-count={}", stats.collections());
         eprintln!("GC stats: collection-pauses={}", stats.pauses());
         eprintln!("GC stats: threshold={}", self.threshold);
+        eprintln!("GC stats: total allocated={}", self.total_allocated);
 
         eprintln!(
             "GC summary: {:.1}ms collection ({}), {:.1}ms mutator, {:.1}ms total ({}% mutator, {}% GC)",
@@ -698,9 +743,6 @@ impl Collector {
             mutator,
             gc,
         );
-        if unsafe { GC_STATS.load(Ordering::Relaxed) } {
-            *timer = Timer::new(true);
-        }
     }
 }
 
