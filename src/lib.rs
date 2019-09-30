@@ -61,6 +61,7 @@ pub fn disable_gc_stats() {
     }
 }
 use std::sync::Arc;
+/// All threads should be attached automatically, but you could call this function if you unsure.
 pub fn gc_attach_current_thread() {
     THREAD.with(|thread| {
         let mut threads = THREADS.lock();
@@ -73,6 +74,7 @@ pub fn gc_attach_current_thread() {
     });
 }
 
+/// This function should be called when your thread finished execution ( basically not needed ).
 pub fn gc_detach_current_thread() {
     THREAD.with(|thread| {
         let mut threads = THREADS.lock();
